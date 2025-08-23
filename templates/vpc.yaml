@@ -1,0 +1,357 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Bazar VPC Infrastructure - Networking Layer'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, prod]
+    Description: Environment name (dev/prod)
+  
+  VpcCidr:
+    Type: String
+    Description: CIDR block for VPC
+  
+  PublicSubnet1Cidr:
+    Type: String
+    Description: CIDR block for public subnet 1
+
+  PublicSubnet2Cidr:
+    Type: String
+    Description: CIDR block for public subnet 2
+  
+  PrivateAppSubnetCidr:
+    Type: String
+    Description: CIDR block for private app subnet
+  
+  PrivateDataSubnet1Cidr:
+    Type: String
+    Description: CIDR block for private data subnet 1
+  
+  PrivateDataSubnet2Cidr:
+    Type: String
+    Description: CIDR block for private data subnet 2
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Environment Configuration"
+        Parameters:
+          - Environment
+      - Label:
+          default: "Network Configuration"
+        Parameters:
+          - VpcCidr
+          - PublicSubnet1Cidr
+          - PublicSubnet2Cidr
+          - PrivateAppSubnetCidr
+          - PrivateDataSubnetCidr
+
+Resources:
+  # VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub "bazar-vpc-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Bazar
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "bazar-igw-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Bazar
+
+  # Attach Internet Gateway to VPC
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  # Public Subnet 1
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet1Cidr
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "bazar-public-subnet-1-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Bazar
+        - Key: Type
+          Value: Public
+
+  # Public Subnet 2
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnet2Cidr
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "bazar-public-subnet-2-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Bazar
+        - Key: Type
+          Value: Public
+
+  # Private App Subnet
+  PrivateAppSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateAppSubnetCidr
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "bazar-private-app-subnet-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Bazar
+        - Key: Type
+          Value: Private-App
+
+  # Private Data Subnet 1
+  PrivateDataSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateDataSubnet1Cidr
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "bazar-private-data-subnet1-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Bazar
+        - Key: Type
+          Value: Private-Data
+
+  # Private Data Subnet 2
+  PrivateDataSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateDataSubnet2Cidr
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "bazar-private-data-subnet2-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Bazar
+        - Key: Type
+          Value: Private-Data
+
+  # Public Route Table
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "bazar-public-routes-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Bazar
+
+  # Public Route (Internet Gateway)
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  # Associate Public Subnet 1 with Public Route Table
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  # Associate Public Subnet 2 with Public Route Table
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # Private Route Table
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "bazar-private-routes-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Bazar
+
+  # Associate Private App Subnet with Private Route Table
+  PrivateAppSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateAppSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+  # Associate Private Data Subnet 1 with Private Route Table
+  PrivateDataSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateDataSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  # Associate Private Data Subnet 2 with Private Route Table
+  PrivateDataSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateDataSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  # DHCP Options Set
+  DHCPOptions:
+    Type: AWS::EC2::DHCPOptions
+    Properties:
+      DomainName: !Sub "ec2.internal"
+      DomainNameServers:
+        - AmazonProvidedDNS
+      Tags:
+        - Key: Name
+          Value: !Sub "bazar-dhcp-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Bazar
+
+  # Associate DHCP Options with VPC
+  DHCPOptionsAssociation:
+    Type: AWS::EC2::VPCDHCPOptionsAssociation
+    Properties:
+      DhcpOptionsId: !Ref DHCPOptions
+      VpcId: !Ref VPC
+
+  # Elastic IP for NAT Gateway
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "bazar-nat-eip-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Bazar
+
+  # NAT Gateway
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub "bazar-nat-gateway-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Bazar
+
+  # Private Route to NAT Gateway
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+Outputs:
+  VpcId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub "${AWS::StackName}-VpcId"
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnet1Id"
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnet2Id"
+
+  PrivateAppSubnetId:
+    Description: Private App Subnet ID
+    Value: !Ref PrivateAppSubnet
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateAppSubnetId"
+
+  PrivateDataSubnet1Id:
+    Description: Private Data Subnet 1 ID
+    Value: !Ref PrivateDataSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateDataSubnet1Id"
+  
+  PrivateDataSubnet2Id:
+    Description: Private Data Subnet 2 ID
+    Value: !Ref PrivateDataSubnet2
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateDataSubnet2Id"
+
+  PrivateRouteTableId:
+    Description: Private Route Table ID
+    Value: !Ref PrivateRouteTable
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateRouteTableId"
+
+  NatGatewayId:
+    Description: NAT Gateway ID
+    Value: !Ref NatGateway
+    Export:
+      Name: !Sub "${AWS::StackName}-NatGatewayId"
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub "${AWS::StackName}-InternetGatewayId" 

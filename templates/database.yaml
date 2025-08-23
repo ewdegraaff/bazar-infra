@@ -1,0 +1,509 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Bazar Database Infrastructure - RDS, S3, VPC Endpoints'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, prod]
+    Description: Environment name (dev/prod)
+  
+  VpcId:
+    Type: String
+    Description: VPC ID from VPC stack
+  
+  PrivateDataSubnetId:
+    Type: String
+    Description: Private Data Subnet ID from VPC stack
+  
+  PrivateDataSubnet2Id:
+    Type: String
+    Description: Private Data Subnet 2 ID (manually created)
+  
+  PrivateAppSubnetId:
+    Type: String
+    Description: Private App Subnet ID from VPC stack
+  
+  EcsSecurityGroupId:
+    Type: String
+    Description: ECS Security Group ID from Compute stack (optional for initial deployment)
+    Default: ""
+  
+  PrivateRouteTableId:
+    Type: String
+    Description: Private Route Table ID from VPC stack
+  
+  DbInstanceClass:
+    Type: String
+    Default: db.t3.micro
+    Description: RDS instance class
+  
+  DbAllocatedStorage:
+    Type: Number
+    Default: 20
+    Description: Allocated storage for RDS instance (GB)
+  
+  DbMultiAz:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Enable Multi-AZ deployment
+  
+  DbBackupRetention:
+    Type: Number
+    Default: 7
+    Description: Backup retention period (days)
+  
+  DbUsername:
+    Type: String
+    Default: "bazar_admin"
+    Description: Database master username
+  
+  DbPassword:
+    Type: String
+    NoEcho: true
+    Description: Database master password
+    MinLength: 8
+
+Resources:
+  # Security Groups
+  
+  # RDS Security Group
+  RdsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "bazar-rds-sg-${Environment}"
+      GroupDescription: Security group for RDS PostgreSQL instance
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: "10.0.10.0/24"
+          Description: PostgreSQL access from private app subnet
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub "bazar-rds-sg-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Bazar
+
+  # S3 Backup Bucket (temporarily commented out - already exists)
+  # S3BackupBucket:
+  #   Type: AWS::S3::Bucket
+  #   DeletionPolicy: Retain
+  #   UpdateReplacePolicy: Retain
+  #   Properties:
+  #     BucketName: !Sub "bazar-db-backups-${Environment}-${AWS::AccountId}"
+  #     VersioningConfiguration:
+  #       Status: Enabled
+  #     PublicAccessBlockConfiguration:
+  #       BlockPublicAcls: true
+  #       BlockPublicPolicy: true
+  #       IgnorePublicAcls: true
+  #       RestrictPublicBuckets: true
+  #     BucketEncryption:
+  #       ServerSideEncryptionConfiguration:
+  #         - ServerSideEncryptionByDefault:
+  #             SSEAlgorithm: AES256
+  #     LifecycleConfiguration:
+  #       Rules:
+  #         - Id: DeleteOldBackups
+  #           Status: Enabled
+  #           ExpirationInDays: 90
+  #           NoncurrentVersionExpirationInDays: 30
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub "bazar-db-backups-${Environment}"
+  #       - Key: Environment
+  #         Value: !Ref Environment
+  #       - Key: Project
+  #         Value: Bazar
+
+  # S3 Static Assets Bucket (temporarily commented out - already exists)
+  # S3StaticAssetsBucket:
+  #   Type: AWS::S3::Bucket
+  #   DeletionPolicy: Retain
+  #   UpdateReplacePolicy: Retain
+  #   Properties:
+  #     BucketName: !Sub "bazar-static-assets-${Environment}-${AWS::AccountId}"
+  #     VersioningConfiguration:
+  #       Status: Enabled
+  #     PublicAccessBlockConfiguration:
+  #       BlockPublicAcls: true
+  #       BlockPublicPolicy: true
+  #       IgnorePublicAcls: true
+  #       RestrictPublicBuckets: true
+  #     BucketEncryption:
+  #       ServerSideEncryptionConfiguration:
+  #         - ServerSideEncryptionByDefault:
+  #             SSEAlgorithm: AES256
+  #     LifecycleConfiguration:
+  #       Rules:
+  #         - Id: DeleteOldVersions
+  #           Status: Enabled
+  #           NoncurrentVersionExpirationInDays: 30
+  #     CorsConfiguration:
+  #       CorsRules:
+  #         - AllowedHeaders: ["*"]
+  #           AllowedMethods: [GET, HEAD]
+  #           AllowedOrigins: ["*"]
+  #           MaxAge: 3000
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub "bazar-static-assets-${Environment}"
+  #       - Key: Environment
+  #         Value: !Ref Environment
+  #       - Key: Project
+  #         Value: Bazar
+
+  # S3 Backup Bucket Policy (temporarily commented out - bucket already exists)
+  # S3BackupBucketPolicy:
+  #   Type: AWS::S3::BucketPolicy
+  #   Properties:
+  #     Bucket: !Ref S3BackupBucket
+  #     PolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Sid: DenyUnencryptedObjectUploads
+  #           Effect: Deny
+  #           Principal: "*"
+  #           Action: s3:PutObject
+  #           Resource: !Sub "${S3BackupBucket}/*"
+  #           Condition:
+  #             StringNotEquals:
+  #               s3:x-amz-server-side-encryption: "AES256"
+  #         - Sid: DenyIncorrectEncryptionHeader
+  #           Effect: Deny
+  #           Principal: "*"
+  #           Action: s3:PutObject
+  #           Resource: !Sub "${S3BackupBucket}/*"
+  #           Condition:
+  #             StringNotEquals:
+  #               s3:x-amz-server-side-encryption: "AES256"
+
+  # S3 Static Assets Bucket Policy (temporarily commented out - bucket already exists)
+  # S3StaticAssetsBucketPolicy:
+  #   Type: AWS::S3::BucketPolicy
+  #   Properties:
+  #     Bucket: !Ref S3StaticAssetsBucket
+  #     PolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Sid: DenyUnencryptedObjectUploads
+  #           Effect: Deny
+  #           Principal: "*"
+  #           Action: s3:PutObject
+  #           Resource: !Sub "${S3StaticAssetsBucket}/*"
+  #           Condition:
+  #             StringNotEquals:
+  #               s3:x-amz-server-side-encryption: "AES256"
+  #         - Sid: DenyIncorrectEncryptionHeader
+  #           Effect: Deny
+  #           Principal: "*"
+  #           Action: s3:PutObject
+  #           Resource: !Sub "${S3StaticAssetsBucket}/*"
+  #           Condition:
+  #             StringNotEquals:
+  #               s3:x-amz-server-side-encryption: "AES256"
+
+  # RDS Subnet Group
+  RdsSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub "bazar-rds-subnet-group-${Environment}"
+      DBSubnetGroupDescription: Subnet group for Bazar RDS instance
+      SubnetIds:
+        - !Ref PrivateDataSubnetId
+        - !Ref PrivateDataSubnet2Id
+      Tags:
+        - Key: Name
+          Value: !Sub "bazar-rds-subnet-group-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Bazar
+
+  # RDS Parameter Group
+  RdsParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      DBParameterGroupName: !Sub "bazar-rds-params-${Environment}"
+      Description: Parameter group for Bazar PostgreSQL instance
+      Family: postgres13
+      Parameters:
+        log_statement: "all"
+        log_min_duration_statement: "1000"
+        shared_preload_libraries: "pg_stat_statements"
+      Tags:
+        - Key: Name
+          Value: !Sub "bazar-rds-params-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Bazar
+
+  # RDS PostgreSQL Instance
+  RdsInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub "bazar-postgres-${Environment}"
+      DBInstanceClass: !Ref DbInstanceClass
+      Engine: postgres
+      EngineVersion: "13.22"
+      AllocatedStorage: !Ref DbAllocatedStorage
+      StorageType: gp2
+      StorageEncrypted: true
+      MultiAZ: !Ref DbMultiAz
+      BackupRetentionPeriod: !Ref DbBackupRetention
+      PreferredBackupWindow: "03:00-04:00"
+      PreferredMaintenanceWindow: "sun:04:00-sun:05:00"
+      DBName: "bazar"
+      MasterUsername: !Ref DbUsername
+      MasterUserPassword: !Ref DbPassword
+      VPCSecurityGroups:
+        - !Ref RdsSecurityGroup
+      DBSubnetGroupName: !Ref RdsSubnetGroup
+      DBParameterGroupName: !Ref RdsParameterGroup
+      PubliclyAccessible: false
+      DeletionProtection: !If [IsProd, true, false]
+      FinalDBSnapshotIdentifier: !If [IsProd, !Sub "bazar-final-snapshot-${Environment}-${AWS::StackId}", !Ref "AWS::NoValue"]
+      MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt RdsMonitoringRole.Arn
+      EnablePerformanceInsights: true
+      PerformanceInsightsRetentionPeriod: 7
+      PerformanceInsightsKMSKeyId: !Ref "AWS::NoValue"
+      Tags:
+        - Key: Name
+          Value: !Sub "bazar-postgres-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Bazar
+
+  # RDS Monitoring Role
+  RdsMonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "bazar-rds-monitoring-role-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: monitoring.rds.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: Bazar
+
+  # VPC Endpoints
+  
+  # S3 VPC Endpoint (temporarily commented out - causing DNS conflicts)
+  # S3VpcEndpoint:
+  #   Type: AWS::EC2::VPCEndpoint
+  #   Properties:
+  #     VpcId: !Ref VpcId
+  #     ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+  #     VpcEndpointType: Gateway
+  #     RouteTableIds:
+  #       - !Ref PrivateRouteTableId
+  #     PolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal: "*"
+  #           Action:
+  #             - s3:GetObject
+  #             - s3:PutObject
+  #             - s3:DeleteObject
+  #           Resource: !Sub "arn:aws:s3:::bazar-*-${Environment}/*"
+  #       Tags:
+  #         - Key: Name
+  #           Value: !Sub "bazar-s3-endpoint-${Environment}"
+  #         - Key: Environment
+  #           Value: !Ref Environment
+  #         - Key: Project
+  #           Value: Bazar
+
+  # ECR API VPC Endpoint (temporarily commented out - causing DNS conflicts)
+  # EcrApiVpcEndpoint:
+  #   Type: AWS::EC2::VPCEndpoint
+  #   Properties:
+  #     VpcId: !Ref VpcId
+  #     ServiceName: !Sub "com.amazonaws.${AWS::Region}.ecr.api"
+  #     VpcEndpointType: Interface
+  #     SubnetIds:
+  #       - !Ref PrivateAppSubnetId
+  #     SecurityGroupIds:
+  #       - !Ref VpcEndpointSecurityGroup
+  #     PrivateDnsEnabled: true
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub "bazar-ecr-api-endpoint-${Environment}"
+  #       - Key: Environment
+  #         Value: !Ref Environment
+  #       - Key: Project
+  #         Value: Bazar
+  #
+  # # ECR DKR VPC Endpoint (temporarily commented out - causing DNS conflicts)
+  # EcrDkrVpcEndpoint:
+  #   Type: AWS::EC2::VPCEndpoint
+  #   Properties:
+  #     VpcId: !Ref VpcId
+  #     ServiceName: !Sub "com.amazonaws.${AWS::Region}.ecr.dkr"
+  #     VpcEndpointType: Interface
+  #     SubnetIds:
+  #       - !Ref PrivateAppSubnetId
+  #     SecurityGroupIds:
+  #       - !Ref VpcEndpointSecurityGroup
+  #     PrivateDnsEnabled: true
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub "bazar-ecr-dkr-endpoint-${Environment}"
+  #       - Key: Environment
+  #         Value: !Ref Environment
+  #       - Key: Project
+  #         Value: Bazar
+
+  # CloudWatch Logs VPC Endpoint (temporarily commented out - causing DNS conflicts)
+  # CloudWatchLogsVpcEndpoint:
+  #   Type: AWS::EC2::VPCEndpoint
+  #   Properties:
+  #     VpcId: !Ref VpcId
+  #     ServiceName: !Sub "com.amazonaws.${AWS::Region}.logs"
+  #     VpcEndpointType: Interface
+  #     SubnetIds:
+  #       - !Ref PrivateAppSubnetId
+  #     SecurityGroupIds:
+  #       - !Ref VpcEndpointSecurityGroup
+  #     PrivateDnsEnabled: true
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub "bazar-logs-endpoint-${Environment}"
+  #       - Key: Environment
+  #         Value: !Ref Environment
+  #       - Key: Project
+  #         Value: Bazar
+  #
+  # # SSM VPC Endpoint (temporarily commented out - causing DNS conflicts)
+  # SsmVpcEndpoint:
+  #   Type: AWS::EC2::VPCEndpoint
+  #   Properties:
+  #     VpcId: !Ref VpcId
+  #     ServiceName: !Sub "com.amazonaws.${AWS::Region}.ssm"
+  #     VpcEndpointType: Interface
+  #     SubnetIds:
+  #       - !Ref PrivateAppSubnetId
+  #     SecurityGroupIds:
+  #       - !Ref VpcEndpointSecurityGroup
+  #     PrivateDnsEnabled: true
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub "bazar-ssm-endpoint-${Environment}"
+  #       - Key: Environment
+  #         Value: !Ref Environment
+  #       - Key: Project
+  #         Value: Bazar
+
+  # Secrets Manager VPC Endpoint (temporarily commented out - causing DNS conflicts)
+  # SecretsManagerVpcEndpoint:
+  #   Type: AWS::EC2::VPCEndpoint
+  #   Properties:
+  #     VpcId: !Ref VpcId
+  #     ServiceName: !Sub "com.amazonaws.${AWS::Region}.secretsmanager"
+  #     VpcEndpointType: Interface
+  #     SubnetIds:
+  #       - !Ref PrivateAppSubnetId
+  #     SecurityGroupIds:
+  #       - !Ref VpcEndpointSecurityGroup
+  #     PrivateDnsEnabled: true
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub "bazar-secrets-endpoint-${Environment}"
+  #       - Key: Environment
+  #         Value: !Ref Environment
+  #       - Key: Project
+  #         Value: Bazar
+  #
+  # # VPC Endpoint Security Group (temporarily commented out - not needed without VPC endpoints)
+  # VpcEndpointSecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupName: !Sub "bazar-vpc-endpoint-sg-${Environment}"
+  #     GroupDescription: Security group for VPC endpoints
+  #     VpcId: !Ref VpcId
+  #     SecurityGroupIngress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: "10.0.10.0/24"
+  #         Description: HTTPS from private app subnet
+  #     SecurityGroupEgress:
+  #       - IpProtocol: -1
+  #         CidrIp: 0.0.0.0/0
+  #         Description: Allow all outbound traffic
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub "bazar-vpc-endpoint-sg-${Environment}"
+  #       - Key: Environment
+  #         Value: !Ref Environment
+  #       - Key: Project
+  #         Value: Bazar
+
+
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, "prod"]
+
+Outputs:
+  RdsEndpoint:
+    Description: RDS PostgreSQL Endpoint
+    Value: !GetAtt RdsInstance.Endpoint.Address
+    Export:
+      Name: !Sub "${AWS::StackName}-RdsEndpoint"
+
+  RdsPort:
+    Description: RDS PostgreSQL Port
+    Value: !GetAtt RdsInstance.Endpoint.Port
+    Export:
+      Name: !Sub "${AWS::StackName}-RdsPort"
+
+  RdsSecurityGroupId:
+    Description: RDS Security Group ID
+    Value: !Ref RdsSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-RdsSecurityGroupId"
+
+  # S3BackupBucketName:
+  #   Description: S3 Backup Bucket Name
+  #   Value: !Ref S3BackupBucket
+  #   Export:
+  #     Name: !Sub "${AWS::StackName}-S3BackupBucketName"
+  #
+  # S3BackupBucketArn:
+  #   Description: S3 Backup Bucket ARN
+  #   Value: !Sub "arn:aws:s3:::${S3BackupBucket}"
+  #   Export:
+  #     Name: !Sub "${AWS::StackName}-S3BackupBucketArn"
+
+  # S3StaticAssetsBucketName:
+  #   Description: S3 Static Assets Bucket Name
+  #   Value: !Ref S3StaticAssetsBucket
+  #   Export:
+  #     Name: !Sub "${AWS::StackName}-S3StaticAssetsBucketName"
+  #
+  # S3StaticAssetsBucketArn:
+  #   Description: S3 Static Assets Bucket ARN
+  #   Value: !Sub "arn:aws:s3:::${S3StaticAssetsBucket}"
+  #   Export:
+  #     Name: !Sub "${AWS::StackName}-S3StaticAssetsBucketArn" 

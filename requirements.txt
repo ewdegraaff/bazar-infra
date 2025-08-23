@@ -1,0 +1,15 @@
+# Python dependencies for Bazar Infrastructure
+# These are optional but useful for enhanced functionality
+
+# YAML parsing (for better environment configuration handling)
+PyYAML>=6.0
+
+# AWS SDK for Python (alternative to AWS CLI)
+boto3>=1.26.0
+botocore>=1.29.0
+
+# CloudFormation template validation
+cfn-lint>=0.72.0
+
+# JSON processing (for script output formatting)
+jq>=1.4.0 

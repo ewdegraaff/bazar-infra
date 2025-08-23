@@ -1,0 +1,16 @@
+[
+  {
+    "ResourceType": "AWS::S3::Bucket",
+    "LogicalResourceId": "S3BackupBucket",
+    "ResourceIdentifier": {
+      "BucketName": "bazar-db-backups-dev-004657931285"
+    }
+  },
+  {
+    "ResourceType": "AWS::S3::Bucket",
+    "LogicalResourceId": "S3StaticAssetsBucket",
+    "ResourceIdentifier": {
+      "BucketName": "bazar-static-assets-dev-004657931285"
+    }
+  }
+]
