@@ -41,31 +41,31 @@ help:
 # Deploy environments
 deploy-dev:
 	@echo "Deploying DEV environment..."
-	./scripts/deploy.sh dev
+	@AWS_PROFILE=bazar-api ./scripts/deploy.sh dev
 
 deploy-prod:
 	@echo "Deploying PROD environment..."
-	./scripts/deploy.sh prod
+	@AWS_PROFILE=bazar-api ./scripts/deploy.sh prod
 
 # Teardown environments
 teardown-dev:
 	@echo "Removing DEV environment..."
-	./scripts/teardown.sh dev
+	@AWS_PROFILE=bazar-api ./scripts/teardown.sh dev
 
 teardown-prod:
 	@echo "Removing PROD environment..."
-	./scripts/teardown.sh prod
+	@AWS_PROFILE=bazar-api ./scripts/teardown.sh prod
 
 
 
 # Status checks
 status-dev:
 	@echo "Checking DEV environment status..."
-	./scripts/status.sh dev
+	@AWS_PROFILE=bazar-api ./scripts/status.sh dev
 
 status-prod:
 	@echo "Checking PROD environment status..."
-	./scripts/status.sh prod
+	@AWS_PROFILE=bazar-api ./scripts/status.sh prod
 
 # Individual resource status checks (Option 3)
 status-dev-stack:
@@ -151,27 +151,27 @@ config-prod:
 # Quick deployment of specific stacks
 deploy-dev-vpc:
 	@echo "Deploying DEV VPC stack..."
-	./scripts/deploy.sh dev vpc
+	@AWS_PROFILE=bazar-api ./scripts/deploy.sh dev vpc
 
 deploy-dev-compute:
 	@echo "Deploying DEV compute stack..."
-	./scripts/deploy.sh dev compute
+	@AWS_PROFILE=bazar-api ./scripts/deploy.sh dev compute
 
 deploy-dev-database:
 	@echo "Deploying DEV database stack..."
-	./scripts/deploy.sh dev database
+	@AWS_PROFILE=bazar-api ./scripts/deploy.sh dev database
 
 deploy-prod-vpc:
 	@echo "Deploying PROD VPC stack..."
-	./scripts/deploy.sh prod vpc
+	@AWS_PROFILE=bazar-api ./scripts/deploy.sh prod vpc
 
 deploy-prod-compute:
 	@echo "Deploying PROD compute stack..."
-	./scripts/deploy.sh prod compute
+	@AWS_PROFILE=bazar-api ./scripts/deploy.sh prod compute
 
 deploy-prod-database:
 	@echo "Deploying PROD database stack..."
-	./scripts/deploy.sh prod database
+	@AWS_PROFILE=bazar-api ./scripts/deploy.sh prod database
 
 # Environment setup
 setup-env:
@@ -195,11 +195,11 @@ setup-env:
 # Test AWS configuration
 test-aws:
 	@echo "Testing AWS profile configuration..."
-	./scripts/test-aws.sh
+	@AWS_PROFILE=bazar-api ./scripts/test-aws.sh
 
 # Fix ECS service linked role
 fix-ecs-role:
 	@echo "Fixing ECS service linked role..."
-	./scripts/fix-ecs-role.sh
+	@AWS_PROFILE=bazar-api ./scripts/fix-ecs-role.sh
 
  
